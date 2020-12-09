@@ -115,6 +115,11 @@ RCT_EXPORT_VIEW_PROPERTY(inverted, BOOL)
 RCT_EXPORT_VIEW_PROPERTY(contentInsetAdjustmentBehavior, UIScrollViewContentInsetAdjustmentBehavior)
 #endif
 
+// PATCHED
+RCT_EXPORT_VIEW_PROPERTY(initialScroll, NSDictionary)
+RCT_EXPORT_VIEW_PROPERTY(onVisibleItemsRangeChange, RCTDirectEventBlock)
+// END PATCHED
+
 // overflow is used both in css-layout as well as by react-native. In css-layout
 // we always want to treat overflow as scroll but depending on what the overflow
 // is set to from js we want to clip drawing or not. This piece of code ensures

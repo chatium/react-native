@@ -14,6 +14,21 @@
 
 @implementation RCTScrollContentView
 
+- (void)layoutSubviews {
+  [super layoutSubviews];
+
+  RCTScrollView *scrollView = (RCTScrollView *)self.superview.superview;
+
+  if (!scrollView) {
+    return;
+  }
+
+  RCTAssert([scrollView isKindOfClass:[RCTScrollView class]],
+    @"Unexpected view hierarchy of RCTScrollView component.");
+
+  [scrollView updateContentOffsetIfNeeded];
+}
+
 - (void)reactSetFrame:(CGRect)frame
 {
   [super reactSetFrame:frame];

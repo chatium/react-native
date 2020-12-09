@@ -63,6 +63,10 @@
 @property (nonatomic, copy) RCTDirectEventBlock onMomentumScrollBegin;
 @property (nonatomic, copy) RCTDirectEventBlock onMomentumScrollEnd;
 
+// PATCHED PROPERTIES
+@property (nonatomic, copy) NSDictionary *initialScroll;
+@property (nonatomic, copy) RCTDirectEventBlock onVisibleItemsRangeChange;
+
 @end
 
 @interface RCTScrollView (Internal)

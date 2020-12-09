@@ -1261,6 +1261,23 @@ static void YGConstrainMaxSizeForMode(
   }
 }
 
+static void YGConstraintMaxSizeToRespectAspectRatio(
+    const YGNodeConstRef node,
+    float* width,
+    float* height) {
+  const auto& nodeStyle = node->getStyle();
+  if (!nodeStyle.aspectRatio().isUndefined()) {
+      const float aspectRatio = nodeStyle.aspectRatio().unwrap();
+      const float expectedHeight = *width / aspectRatio;
+      const float expectedWidth = *height * aspectRatio;
+      if (expectedWidth > *width) {
+        *height = expectedHeight;
+      } else if (expectedHeight > *height) {
+        *width = expectedWidth;
+      }
+  }
+}
+
 static void YGNodeComputeFlexBasisForChild(
     const YGNodeRef node,
     const YGNodeRef child,
@@ -1434,6 +1451,7 @@ static void YGNodeComputeFlexBasisForChild(
         ownerWidth,
         &childHeightMeasureMode,
         &childHeight);
+    YGConstraintMaxSizeToRespectAspectRatio(child, &childWidth, &childHeight);
 
     // Measure the child
     YGLayoutNodeInternal(
@@ -2244,6 +2262,10 @@ static float YGDistributeFreeSpaceSecondPass(
         availableInnerWidth,
         &childCrossMeasureMode,
         &childCrossSize);
+    YGConstraintMaxSizeToRespectAspectRatio(
+        currentRelativeChild,
+        isMainAxisRow ? &childMainSize : &childCrossSize,
+       !isMainAxisRow ? &childMainSize : &childCrossSize);
 
     const bool requiresStretchLayout =
         !YGNodeIsStyleDimDefined(
@@ -3180,6 +3202,10 @@ static void YGNodelayoutImpl(
                   availableInnerWidth,
                   &childCrossMeasureMode,
                   &childCrossSize);
+              YGConstraintMaxSizeToRespectAspectRatio(
+                  child,
+                  isMainAxisRow ? &childMainSize : &childCrossSize,
+                 !isMainAxisRow ? &childMainSize : &childCrossSize);
 
               const float childWidth =
                   isMainAxisRow ? childMainSize : childCrossSize;

@@ -230,6 +230,7 @@
     [_customRefreshControl removeFromSuperview];
   }
   _customRefreshControl = refreshControl;
+  _customRefreshControl.layer.zPosition = 10;
   [self addSubview:_customRefreshControl];
 }
 
@@ -255,6 +256,15 @@
 
 @end
 
+struct VisibleItemsRange
+{
+    NSInteger minIdx;
+    NSInteger maxIdx;
+    NSInteger fromReactTag;
+    NSInteger toReactTag;
+};
+typedef struct CG_BOXABLE VisibleItemsRange VisibleItemsRange;
+
 @interface RCTScrollView () <RCTUIManagerObserver>
 
 @end
@@ -262,6 +272,7 @@
 @implementation RCTScrollView {
   RCTEventDispatcher *_eventDispatcher;
   CGRect _prevFirstVisibleFrame;
+  CGPoint _prevFirstVisibleFrameContentOffset;
   __weak UIView *_firstVisibleView;
   RCTCustomScrollView *_scrollView;
   UIView *_contentView;
@@ -272,6 +283,12 @@
   uint16_t _coalescingKey;
   NSString *_lastEmittedEventName;
   NSHashTable *_scrollListeners;
+
+  // PATCHED
+  BOOL _didInitiallyScrolled;
+  BOOL _suppressEmitVisibleItemsRangeEvent;
+  BOOL _wasMissedEmitVisibleItemsRangeEvent;
+  VisibleItemsRange _previousVisibleItemsRange;
 }
 
 - (instancetype)initWithEventDispatcher:(RCTEventDispatcher *)eventDispatcher
@@ -297,6 +314,9 @@
       }
     }
 #endif
+    if (@available(iOS 13.0, *)) {
+      _scrollView.automaticallyAdjustsScrollIndicatorInsets = NO;
+    }
 
     _automaticallyAdjustContentInsets = YES;
     _DEPRECATED_sendUpdatedChildFrames = NO;
@@ -429,6 +449,7 @@ static inline void RCTApplyTransformationAccordingLayoutDirection(
 #endif
 
   [self updateClippedSubviews];
+  [self emitVisibleItemsRangeChangeEvent];
 }
 
 - (void)updateClippedSubviews
@@ -605,7 +626,112 @@ RCT_SCROLL_EVENT_HANDLER(scrollViewDidScrollToTop, onScrollToTop)
     _allowNextScrollNoMatterWhat = NO;
   }
   RCT_FORWARD_SCROLL_EVENT(scrollViewDidScroll : scrollView);
+
+  // PATCHED
+  [self emitVisibleItemsRangeChangeEvent];
+  // END PATCHED
 }
+
+// PATCHED
+- (void)emitVisibleItemsRangeChangeEvent {
+  if (_suppressEmitVisibleItemsRangeEvent) {
+      _wasMissedEmitVisibleItemsRangeEvent = YES;
+      return;
+  }
+  _wasMissedEmitVisibleItemsRangeEvent = NO;
+  if (self.onVisibleItemsRangeChange) {
+    VisibleItemsRange currentItemsRange;
+    currentItemsRange.minIdx = -1;
+    currentItemsRange.maxIdx = -1;
+    BOOL isHorizontal = [self isHorizontal:self->_scrollView];
+    if (isHorizontal) {
+        CGFloat minVisibleX = self->_scrollView.contentOffset.x;
+        CGFloat maxVisibleX = self->_scrollView.contentOffset.x + self.scrollView.frame.size.width;
+        if (maxVisibleX > minVisibleX) {
+          for (NSUInteger ii = 0; ii < self->_contentView.subviews.count; ++ii) {
+            // Find the first entirely visible view. This must be done after we update the content offset
+            // or it will tend to grab rows that were made visible by the shift in position
+            UIView *subview = self->_contentView.subviews[ii];
+            if (![subview isKindOfClass:[UIRefreshControl class]]) {
+              CGFloat viewLeft = subview.frame.origin.x;
+              CGFloat viewRight = viewLeft + subview.frame.size.width;
+              BOOL isViewVisible =
+                (viewLeft >= minVisibleX && viewLeft < maxVisibleX) ||
+                  (viewRight > minVisibleX && viewRight <= maxVisibleX) ||
+                  (viewLeft < minVisibleX && viewRight > maxVisibleX);
+              if (currentItemsRange.minIdx == -1) {
+                if (isViewVisible) {
+                  currentItemsRange.minIdx = ii;
+                  currentItemsRange.maxIdx = (self->_contentView.subviews.count - 1);
+                }
+              } else if (!isViewVisible) {
+                currentItemsRange.maxIdx = (ii - 1);
+                break;
+              }
+            }
+          }
+        }
+    } else {
+        CGFloat minVisibleY = self->_scrollView.contentOffset.y;
+        CGFloat maxVisibleY = self->_scrollView.contentOffset.y + self.scrollView.frame.size.height;
+        if (maxVisibleY > minVisibleY) {
+          for (NSUInteger ii = 0; ii < self->_contentView.subviews.count; ++ii) {
+            // Find the first entirely visible view. This must be done after we update the content offset
+            // or it will tend to grab rows that were made visible by the shift in position
+            UIView *subview = self->_contentView.subviews[ii];
+            if (![subview isKindOfClass:[UIRefreshControl class]]) {
+              CGFloat viewTop = subview.frame.origin.y;
+              CGFloat viewBottom = viewTop + subview.frame.size.height;
+              BOOL isViewVisible =
+                (viewTop >= minVisibleY && viewTop < maxVisibleY) ||
+                  (viewBottom > minVisibleY && viewBottom <= maxVisibleY) ||
+                  (viewTop < minVisibleY && viewBottom > maxVisibleY);
+              if (currentItemsRange.minIdx == -1) {
+                if (isViewVisible) {
+                  currentItemsRange.minIdx = ii;
+                  currentItemsRange.maxIdx = (self->_contentView.subviews.count - 1);
+                }
+              } else if (!isViewVisible) {
+                currentItemsRange.maxIdx = (ii - 1);
+                break;
+              }
+            }
+          }
+        }
+    }
+    if (
+        currentItemsRange.minIdx != -1 &&
+        currentItemsRange.maxIdx != -1 &&
+        currentItemsRange.minIdx >= 0 &&
+        currentItemsRange.minIdx < self->_contentView.subviews.count &&
+        currentItemsRange.maxIdx >= 0 &&
+        currentItemsRange.maxIdx < self->_contentView.subviews.count
+    ) {
+      RCTView * minView = self->_contentView.subviews[(NSUInteger) currentItemsRange.minIdx];
+      RCTView * maxView = self->_contentView.subviews[(NSUInteger) currentItemsRange.maxIdx];
+      if (minView != nil && maxView != nil && minView.reactTag != nil && maxView.reactTag != nil) {
+          currentItemsRange.fromReactTag = [minView.reactTag integerValue];
+          currentItemsRange.toReactTag = [maxView.reactTag integerValue];
+          if (
+             _previousVisibleItemsRange.maxIdx != currentItemsRange.maxIdx ||
+             _previousVisibleItemsRange.minIdx != currentItemsRange.minIdx ||
+             _previousVisibleItemsRange.fromReactTag != currentItemsRange.fromReactTag ||
+             _previousVisibleItemsRange.toReactTag != currentItemsRange.toReactTag
+            ) {
+              _previousVisibleItemsRange = currentItemsRange;
+              self.onVisibleItemsRangeChange(@{
+                @"fromIndex": @(currentItemsRange.minIdx),
+                @"toIndex": @(currentItemsRange.maxIdx),
+                @"fromReactTag": @(currentItemsRange.fromReactTag),
+                @"toReactTag": @(currentItemsRange.toReactTag),
+              });
+          }
+      }
+    }
+
+  }
+}
+// END PATCHED
 
 - (NSArray<NSDictionary *> *)calculateChildFramesData
 {
@@ -658,7 +784,7 @@ RCT_SCROLL_EVENT_HANDLER(scrollViewDidScrollToTop, onScrollToTop)
     // Find which axis to snap
     BOOL isHorizontal = [self isHorizontal:scrollView];
     CGFloat velocityAlongAxis = isHorizontal ? velocity.x : velocity.y;
-    CGFloat offsetAlongAxis = isHorizontal ? _scrollView.contentOffset.x : _scrollView.contentOffset.y;
+    // CGFloat offsetAlongAxis = isHorizontal ? _scrollView.contentOffset.x : _scrollView.contentOffset.y;
 
     // Calculate maximum content offset
     CGSize viewportSize = [self _calculateViewportSize];
@@ -667,6 +793,7 @@ RCT_SCROLL_EVENT_HANDLER(scrollViewDidScrollToTop, onScrollToTop)
 
     // Calculate the snap offsets adjacent to the initial offset target
     CGFloat targetOffset = isHorizontal ? targetContentOffset->x : targetContentOffset->y;
+    CGFloat offsetAlongAxis = targetOffset;
     CGFloat smallerOffset = 0.0;
     CGFloat largerOffset = maximumOffset;
 
@@ -912,6 +1039,67 @@ RCT_SCROLL_EVENT_HANDLER(scrollViewDidScrollToTop, onScrollToTop)
 - (void)updateContentOffsetIfNeeded
 {
   CGSize contentSize = self.contentSize;
+  CGRect containerFrame = self.scrollView.frame;
+
+  // PATCHED
+    if (!_didInitiallyScrolled && self->_initialScroll != nil && contentSize.height > 0 && contentSize.width > 0) {
+    BOOL horz = contentSize.width > containerFrame.size.width;;
+    if (containerFrame.size.height > 0 && containerFrame.size.width > 0) {
+      BOOL scrollToEnd = [self->_initialScroll[@"end"] boolValue];
+      if (scrollToEnd) {
+        _didInitiallyScrolled = TRUE;
+        CGPoint newOffset = _scrollView.contentOffset;
+          if (horz) {
+              newOffset.x = contentSize.width - containerFrame.size.width;
+              newOffset.x = MAX(newOffset.x, 0);
+          } else {
+              newOffset.y = contentSize.height - containerFrame.size.height;
+              newOffset.y = MAX(newOffset.y, 0);
+          }
+        _scrollView.contentOffset = newOffset;
+      } else {
+        NSUInteger index = [self->_initialScroll[@"index"] integerValue];
+        double offset = [self->_initialScroll[@"offset"] doubleValue];
+
+        BOOL stickToBottom = [self->_initialScroll[@"stickToBottom"] boolValue];
+        if (index >= 0 && index < self->_contentView.subviews.count) {
+          RCTView *subView = self->_contentView.subviews[index];
+          if (subView != nil) {
+            CGRect viewFrame = subView.frame;
+            if (viewFrame.size.height > 0 || viewFrame.size.width > 0) {
+              _didInitiallyScrolled = TRUE;
+              CGPoint newOffset = _scrollView.contentOffset;
+              if (stickToBottom) {
+                  if (horz) {
+                      newOffset.x = viewFrame.origin.x + viewFrame.size.width - containerFrame.size.width + offset;
+                  } else {
+                      newOffset.y = viewFrame.origin.y + viewFrame.size.height - containerFrame.size.height + offset;
+                  }
+              } else {
+                  if (horz) {
+                      newOffset.x = viewFrame.origin.x + offset;
+                  } else {
+                      newOffset.y = viewFrame.origin.y + offset;
+                  }
+
+              }
+                if (horz) {
+                    newOffset.x = MIN(newOffset.x, contentSize.width - containerFrame.size.width);
+                    newOffset.x = MAX(newOffset.x, 0);
+                } else {
+                    newOffset.y = MIN(newOffset.y, contentSize.height - containerFrame.size.height);
+                    newOffset.y = MAX(newOffset.y, 0);
+                }
+
+              _scrollView.contentOffset = newOffset;
+            }
+          }
+        }
+      }
+    }
+  }
+  // END PATCHED
+
   if (!CGSizeEqualToSize(_scrollView.contentSize, contentSize)) {
     // When contentSize is set manually, ScrollView internals will reset
     // contentOffset to  {0, 0}. Since we potentially set contentSize whenever
@@ -921,6 +1109,12 @@ RCT_SCROLL_EVENT_HANDLER(scrollViewDidScrollToTop, onScrollToTop)
     _scrollView.contentSize = contentSize;
     _scrollView.contentOffset = newOffset;
   }
+
+  // PATCHED
+  [self emitVisibleItemsRangeChangeEvent];
+
+  [self scrollViewDidScroll:_scrollView];
+  // END PATCHED
 }
 
 // maintainVisibleContentPosition is used to allow seamless loading of content from both ends of
@@ -934,6 +1128,13 @@ RCT_SCROLL_EVENT_HANDLER(scrollViewDidScrollToTop, onScrollToTop)
   }
   _maintainVisibleContentPosition = maintainVisibleContentPosition;
 }
+
+// PATCHED
+// initialScrollItem allows to position scroll view right after render to this item
+- (void)setInitialScrollItem:(NSDictionary *)initialScroll {
+  _initialScroll = initialScroll;
+}
+// END PATCHED
 
 #pragma mark - RCTUIManagerObserver
 
@@ -956,18 +1157,29 @@ RCT_SCROLL_EVENT_HANDLER(scrollViewDidScrollToTop, onScrollToTop)
             break;
           }
         }
+        self->_prevFirstVisibleFrameContentOffset = self->_scrollView.contentOffset;
+        self->_suppressEmitVisibleItemsRangeEvent = YES;
       }];
   [manager addUIBlock:^(__unused RCTUIManager *uiManager, __unused NSDictionary<NSNumber *, UIView *> *viewRegistry) {
     if (self->_maintainVisibleContentPosition == nil) {
+      self->_suppressEmitVisibleItemsRangeEvent = NO;
+      if (self->_wasMissedEmitVisibleItemsRangeEvent) {
+        [self emitVisibleItemsRangeChangeEvent];
+      }
       return; // The prop might have changed in the previous UIBlocks, so need to abort here.
     }
     NSNumber *autoscrollThreshold = self->_maintainVisibleContentPosition[@"autoscrollToTopThreshold"];
     // TODO: detect and handle/ignore re-ordering
     if ([self isHorizontal:self->_scrollView]) {
+      CGFloat contentOffsetDeltaX = self->_prevFirstVisibleFrameContentOffset.x - self->_scrollView.contentOffset.x;
       CGFloat deltaX = self->_firstVisibleView.frame.origin.x - self->_prevFirstVisibleFrame.origin.x;
       if (ABS(deltaX) > 0.1) {
+        CGFloat newOffsetX = self->_scrollView.contentOffset.x + deltaX + contentOffsetDeltaX;
+        newOffsetX = MIN(self.contentSize.width - self.scrollView.frame.size.width, newOffsetX);
+        newOffsetX = MAX(0, newOffsetX);
         self->_scrollView.contentOffset =
-            CGPointMake(self->_scrollView.contentOffset.x + deltaX, self->_scrollView.contentOffset.y);
+            CGPointMake(newOffsetX, self->_scrollView.contentOffset.y);
+        [self scrollViewDidScroll:self->_scrollView];
         if (autoscrollThreshold != nil) {
           // If the offset WAS within the threshold of the start, animate to the start.
           if (self->_scrollView.contentOffset.x - deltaX <= [autoscrollThreshold integerValue]) {
@@ -977,10 +1189,15 @@ RCT_SCROLL_EVENT_HANDLER(scrollViewDidScrollToTop, onScrollToTop)
       }
     } else {
       CGRect newFrame = self->_firstVisibleView.frame;
+      CGFloat contentOffsetDeltaY = self->_prevFirstVisibleFrameContentOffset.y - self->_scrollView.contentOffset.y;
       CGFloat deltaY = newFrame.origin.y - self->_prevFirstVisibleFrame.origin.y;
       if (ABS(deltaY) > 0.1) {
+        CGFloat newOffsetY = self->_scrollView.contentOffset.y + deltaY + contentOffsetDeltaY;
+        newOffsetY = MIN(self.contentSize.height - self.scrollView.frame.size.height, newOffsetY);
+        newOffsetY = MAX(0, newOffsetY);
         self->_scrollView.contentOffset =
-            CGPointMake(self->_scrollView.contentOffset.x, self->_scrollView.contentOffset.y + deltaY);
+            CGPointMake(self->_scrollView.contentOffset.x, newOffsetY);
+        [self scrollViewDidScroll:self->_scrollView];
         if (autoscrollThreshold != nil) {
           // If the offset WAS within the threshold of the start, animate to the start.
           if (self->_scrollView.contentOffset.y - deltaY <= [autoscrollThreshold integerValue]) {
@@ -988,6 +1205,10 @@ RCT_SCROLL_EVENT_HANDLER(scrollViewDidScrollToTop, onScrollToTop)
           }
         }
       }
+    }
+    self->_suppressEmitVisibleItemsRangeEvent = NO;
+    if (self->_wasMissedEmitVisibleItemsRangeEvent) {
+      [self emitVisibleItemsRangeChangeEvent];
     }
   }];
 }

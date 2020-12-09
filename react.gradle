@@ -30,7 +30,7 @@ def detectCliPath(config) {
     }
 
     def cliPath = ["node", "-e", "console.log(require('react-native/cli').bin);"].execute([], projectDir).text.trim()
-    
+
     if (cliPath) {
         return cliPath
     } else if (new File("${projectDir}/../../node_modules/react-native/cli.js").exists()) {
@@ -44,6 +44,9 @@ def detectCliPath(config) {
 def composeSourceMapsPath = config.composeSourceMapsPath ?: "node_modules/react-native/scripts/compose-source-maps.js"
 def bundleAssetName = config.bundleAssetName ?: "index.android.bundle"
 def entryFile = detectEntryFile(config)
+def entryFileForVariant = config.entryFileForVariant ?: {
+    def variant -> entryFile
+}
 def bundleCommand = config.bundleCommand ?: "bundle"
 def reactRoot = file(config.root ?: "../../")
 def inputExcludes = config.inputExcludes ?: ["android/**", "ios/**"]
@@ -126,7 +129,7 @@ afterEvaluate {
         } else {
             execCommand.addAll([*nodeExecutableAndArgs, cliPath])
         }
-        
+
         def enableHermes = enableHermesForVariant(variant)
 
         def currentBundleTask = tasks.create(
@@ -168,7 +171,7 @@ afterEvaluate {
             }
 
             commandLine(*execCommand, bundleCommand, "--platform", "android", "--dev", "${devEnabled}",
-                "--reset-cache", "--entry-file", entryFile, "--bundle-output", jsBundleFile, "--assets-dest", resourcesDir,
+                "--reset-cache", "--entry-file", entryFileForVariant(variant), "--bundle-output", jsBundleFile, "--assets-dest", resourcesDir,
                 "--sourcemap-output", enableHermes ? jsPackagerSourceMapFile : jsOutputSourceMapFile, *extraArgs)
 
 

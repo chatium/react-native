@@ -67,6 +67,9 @@ RCT_EXPORT_MODULE()
     if (!self.bridge) {                                                                \
       return;                                                                          \
     }                                                                                  \
+    if  ([[UIApplication sharedApplication] applicationState] != UIApplicationStateActive) { \
+      return; \
+    } \
     [self sendEventWithName:@ #EVENT body:RCTParseKeyboardNotification(notification)]; \
   }
 

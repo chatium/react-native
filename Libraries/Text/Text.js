@@ -231,10 +231,16 @@ class TouchableText extends React.Component<Props, State> {
       if (!this.props.suppressHighlighting && isTouchable(this.props)) {
         this.setState({isHighlighted: true});
       }
+      if (this.props.onPressIn != null) {
+        this.props.onPressIn();
+      }
     };
     this.touchableHandleActivePressOut = (): void => {
       if (!this.props.suppressHighlighting && isTouchable(this.props)) {
         this.setState({isHighlighted: false});
+      }
+      if (this.props.onPressOut != null) {
+        this.props.onPressOut();
       }
     };
     this.touchableHandlePress = (event: PressEvent): void => {
@@ -244,6 +250,7 @@ class TouchableText extends React.Component<Props, State> {
     };
     this.touchableHandleLongPress = (event: PressEvent): void => {
       if (this.props.onLongPress != null) {
+        this.touchableHandleActivePressOut();
         this.props.onLongPress(event);
       }
     };
@@ -251,6 +258,12 @@ class TouchableText extends React.Component<Props, State> {
       this.props.pressRetentionOffset == null
         ? PRESS_RECT_OFFSET
         : this.props.pressRetentionOffset;
+    this.touchableGetHighlightDelayMS = () => {
+      return this.props.delayPressIn;
+    }
+    this.touchableGetPressOutDelayMS = () => {
+      return this.props.delayPressOut;
+    }
   }
 }
 
