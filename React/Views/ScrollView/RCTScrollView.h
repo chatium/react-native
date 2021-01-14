@@ -48,6 +48,7 @@
 @property (nonatomic, assign) int snapToInterval;
 @property (nonatomic, assign) BOOL disableIntervalMomentum;
 @property (nonatomic, copy) NSArray<NSNumber *> *snapToOffsets;
+@property (nonatomic, assign) BOOL snapToItems;
 @property (nonatomic, assign) BOOL snapToStart;
 @property (nonatomic, assign) BOOL snapToEnd;
 @property (nonatomic, copy) NSString *snapToAlignment;

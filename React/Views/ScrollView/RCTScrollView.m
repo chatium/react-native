@@ -774,7 +774,7 @@ RCT_SCROLL_EVENT_HANDLER(scrollViewDidScrollToTop, onScrollToTop)
                      withVelocity:(CGPoint)velocity
               targetContentOffset:(inout CGPoint *)targetContentOffset
 {
-  if (self.snapToOffsets) {
+  if (self.snapToOffsets || self.snapToItems) {
     // An alternative to enablePaging and snapToInterval which allows setting custom
     // stopping points that don't have to be the same distance apart. Often seen in
     // apps which feature horizonally scrolling items. snapToInterval does not enforce
@@ -784,7 +784,7 @@ RCT_SCROLL_EVENT_HANDLER(scrollViewDidScrollToTop, onScrollToTop)
     // Find which axis to snap
     BOOL isHorizontal = [self isHorizontal:scrollView];
     CGFloat velocityAlongAxis = isHorizontal ? velocity.x : velocity.y;
-    // CGFloat offsetAlongAxis = isHorizontal ? _scrollView.contentOffset.x : _scrollView.contentOffset.y;
+//    CGFloat offsetAlongAxis = isHorizontal ? _scrollView.contentOffset.x : _scrollView.contentOffset.y;
 
     // Calculate maximum content offset
     CGSize viewportSize = [self _calculateViewportSize];
@@ -792,32 +792,61 @@ RCT_SCROLL_EVENT_HANDLER(scrollViewDidScrollToTop, onScrollToTop)
                                          : MAX(0, _scrollView.contentSize.height - viewportSize.height);
 
     // Calculate the snap offsets adjacent to the initial offset target
-    CGFloat targetOffset = isHorizontal ? targetContentOffset->x : targetContentOffset->y;
+    CGFloat targetOffset = isHorizontal
+      ? (self.disableIntervalMomentum ? _scrollView.contentOffset.x : targetContentOffset->x)
+      : (self.disableIntervalMomentum ? _scrollView.contentOffset.y : targetContentOffset->y);
+
     CGFloat offsetAlongAxis = targetOffset;
     CGFloat smallerOffset = 0.0;
     CGFloat largerOffset = maximumOffset;
+    CGFloat firstOffset = 0.0;
+    CGFloat lastOffset = 0.0;
+    
+    
+    if (self.snapToItems) {
+      for (unsigned long i = 0; i < self.contentView.subviews.count; i++) {
+        CGFloat offset = isHorizontal ? self.contentView.subviews[i].frame.origin.x : self.contentView.subviews[i].frame.origin.y;
+        if (0 == i) {
+          firstOffset = offset;
+        }
+        lastOffset = offset;
 
-    for (unsigned long i = 0; i < self.snapToOffsets.count; i++) {
-      CGFloat offset = [[self.snapToOffsets objectAtIndex:i] floatValue];
+        if (offset <= targetOffset) {
+          if (targetOffset - offset < targetOffset - smallerOffset) {
+            smallerOffset = offset;
+          }
+        }
 
-      if (offset <= targetOffset) {
-        if (targetOffset - offset < targetOffset - smallerOffset) {
-          smallerOffset = offset;
+        if (offset >= targetOffset) {
+          if (offset - targetOffset < largerOffset - targetOffset) {
+            largerOffset = offset;
+          }
         }
       }
+    } else {
+      for (unsigned long i = 0; i < self.snapToOffsets.count; i++) {
+        CGFloat offset = [[self.snapToOffsets objectAtIndex:i] floatValue];
+        if (0 == i) {
+          firstOffset = offset;
+        }
+        lastOffset = offset;
 
-      if (offset >= targetOffset) {
-        if (offset - targetOffset < largerOffset - targetOffset) {
-          largerOffset = offset;
+        if (offset <= targetOffset) {
+          if (targetOffset - offset < targetOffset - smallerOffset) {
+            smallerOffset = offset;
+          }
+        }
+
+        if (offset >= targetOffset) {
+          if (offset - targetOffset < largerOffset - targetOffset) {
+            largerOffset = offset;
+          }
         }
       }
     }
 
     // Calculate the nearest offset
     CGFloat nearestOffset = targetOffset - smallerOffset < largerOffset - targetOffset ? smallerOffset : largerOffset;
-
-    CGFloat firstOffset = [[self.snapToOffsets firstObject] floatValue];
-    CGFloat lastOffset = [[self.snapToOffsets lastObject] floatValue];
 
     // if scrolling after the last snap offset and snapping to the
     // end of the list is disabled, then we allow free scrolling
