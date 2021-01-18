@@ -119,6 +119,11 @@ public class ReactScrollViewManager extends ViewGroupManager<ReactScrollView>
     view.setSnapToEnd(snapToEnd);
   }
 
+  @ReactProp(name = "snapToItems")
+  public void setSnapToItems(ReactScrollView view, boolean snapToItems) {
+    view.setSnapToItems(snapToItems);
+  }
+
   @ReactProp(name = ReactClippingViewGroupHelper.PROP_REMOVE_CLIPPED_SUBVIEWS)
   public void setRemoveClippedSubviews(ReactScrollView view, boolean removeClippedSubviews) {
     view.setRemoveClippedSubviews(removeClippedSubviews);

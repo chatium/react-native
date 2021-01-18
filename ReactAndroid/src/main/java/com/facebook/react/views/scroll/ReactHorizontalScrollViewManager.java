@@ -122,6 +122,11 @@ public class ReactHorizontalScrollViewManager extends ViewGroupManager<ReactHori
     view.setSnapToEnd(snapToEnd);
   }
 
+  @ReactProp(name = "snapToItems")
+  public void setSnapToItems(ReactHorizontalScrollView view, boolean snapToItems) {
+    view.setSnapToItems(snapToItems);
+  }
+
   @ReactProp(name = ReactClippingViewGroupHelper.PROP_REMOVE_CLIPPED_SUBVIEWS)
   public void setRemoveClippedSubviews(
       ReactHorizontalScrollView view, boolean removeClippedSubviews) {

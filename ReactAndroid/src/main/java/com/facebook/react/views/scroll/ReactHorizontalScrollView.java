@@ -17,6 +17,7 @@ import android.view.FocusFinder;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.HorizontalScrollView;
 import android.widget.OverScroller;
 import androidx.annotation.Nullable;
@@ -74,6 +75,7 @@ public class ReactHorizontalScrollView extends HorizontalScrollView
   private @Nullable List<Integer> mSnapOffsets;
   private boolean mSnapToStart = true;
   private boolean mSnapToEnd = true;
+  private boolean mSnapToItems = false;
   private ReactViewBackgroundManager mReactBackgroundManager;
   private boolean mPagedArrowScrolling = false;
   private @Nullable StateWrapper mStateWrapper;
@@ -187,6 +189,10 @@ public class ReactHorizontalScrollView extends HorizontalScrollView
 
   public void setSnapToEnd(boolean snapToEnd) {
     mSnapToEnd = snapToEnd;
+  }
+
+  public void setSnapToItems(boolean snapToItems) {
+    mSnapToItems = snapToItems;
   }
 
   public void flashScrollIndicators() {
@@ -718,8 +724,18 @@ public class ReactHorizontalScrollView extends HorizontalScrollView
       return;
     }
 
+    ViewGroup contentViewGroup = null;
+    View firstChild = getChildAt(0);
+    if (firstChild instanceof ViewGroup) {
+      contentViewGroup = (ViewGroup) firstChild;
+    }
+
+    if (contentViewGroup == null || contentViewGroup.getChildCount() <= 0) {
+      return;
+    }
+
     // pagingEnabled only allows snapping one interval at a time
-    if (mSnapInterval == 0 && mSnapOffsets == null) {
+    if (mSnapInterval == 0 && mSnapOffsets == null && !mSnapToItems) {
       smoothScrollAndSnap(velocityX);
       return;
     }
@@ -752,6 +768,25 @@ public class ReactHorizontalScrollView extends HorizontalScrollView
 
       for (int i = 0; i < mSnapOffsets.size(); i++) {
         int offset = mSnapOffsets.get(i);
+
+        if (offset <= targetOffset) {
+          if (targetOffset - offset < targetOffset - smallerOffset) {
+            smallerOffset = offset;
+          }
+        }
+
+        if (offset >= targetOffset) {
+          if (offset - targetOffset < largerOffset - targetOffset) {
+            largerOffset = offset;
+          }
+        }
+      }
+    } else if (mSnapToItems) {
+      firstOffset = 0;
+      lastOffset = contentViewGroup.getChildAt(contentViewGroup.getChildCount() - 1).getLeft();
+
+      for (int i = 0; i < contentViewGroup.getChildCount(); i++) {
+        int offset = contentViewGroup.getChildAt(i).getLeft();
 
         if (offset <= targetOffset) {
           if (targetOffset - offset < targetOffset - smallerOffset) {
