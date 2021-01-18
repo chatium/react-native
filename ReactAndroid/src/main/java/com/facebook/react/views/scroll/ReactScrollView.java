@@ -638,6 +638,7 @@ public class ReactScrollView extends ScrollView
     int firstOffset = 0;
     int lastOffset = maximumOffset;
     int height = getHeight() - getPaddingBottom() - getPaddingTop();
+    int offsetAlongAxis = targetOffset;
 
     // get the nearest snap points to the target offset
     if (mSnapOffsets != null) {
@@ -692,14 +693,14 @@ public class ReactScrollView extends ScrollView
     // if scrolling after the last snap offset and snapping to the
     // end of the list is disabled, then we allow free scrolling
     if (!mSnapToEnd && targetOffset >= lastOffset) {
-      if (getScrollY() >= lastOffset) {
+      if (offsetAlongAxis >= lastOffset) {
         // free scrolling
       } else {
         // snap to end
         targetOffset = lastOffset;
       }
     } else if (!mSnapToStart && targetOffset <= firstOffset) {
-      if (getScrollY() <= firstOffset) {
+      if (offsetAlongAxis <= firstOffset) {
         // free scrolling
       } else {
         // snap to beginning
@@ -781,6 +782,10 @@ public class ReactScrollView extends ScrollView
         if (scrollY >= scrollRange) {
           mScroller.abortAnimation();
           scrollY = scrollRange;
+        }
+        if (scrollY <= 0) {
+          mScroller.abortAnimation();
+          scrollY = 0;
         }
       }
 

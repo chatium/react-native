@@ -544,6 +544,10 @@ public class ReactHorizontalScrollView extends HorizontalScrollView
           mScroller.abortAnimation();
           scrollX = scrollRange;
         }
+        if (scrollX <= 0) {
+          mScroller.abortAnimation();
+          scrollX = 0;
+        }
       }
 
       // END FB SCROLLVIEW CHANGE
@@ -813,7 +817,8 @@ public class ReactHorizontalScrollView extends HorizontalScrollView
 
     // if scrolling after the last snap offset and snapping to the
     // end of the list is disabled, then we allow free scrolling
-    int currentOffset = getScrollX();
+//    int currentOffset = getScrollX();
+    int currentOffset = targetOffset;
     if (isRTL) {
       currentOffset = maximumOffset - currentOffset;
     }
