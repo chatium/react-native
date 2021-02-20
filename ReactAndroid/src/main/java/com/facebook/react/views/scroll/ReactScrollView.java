@@ -84,7 +84,7 @@ public class ReactScrollView extends ScrollView
   private ReactViewBackgroundManager mReactBackgroundManager;
   private @Nullable StateWrapper mStateWrapper;
 
-  protected boolean mShouldScrollToFocusedView = true;
+  public boolean mShouldScrollToFocusedView = true;
 
   public ReactScrollView(ReactContext context) {
     this(context, null);
