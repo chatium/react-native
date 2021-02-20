@@ -84,6 +84,8 @@ public class ReactScrollView extends ScrollView
   private ReactViewBackgroundManager mReactBackgroundManager;
   private @Nullable StateWrapper mStateWrapper;
 
+  protected boolean mShouldScrollToFocusedView = true;
+
   public ReactScrollView(ReactContext context) {
     this(context, null);
   }
@@ -233,7 +235,7 @@ public class ReactScrollView extends ScrollView
    */
   @Override
   public void requestChildFocus(View child, View focused) {
-    if (focused != null) {
+    if (mShouldScrollToFocusedView && focused != null) {
       scrollToChild(focused);
     }
     super.requestChildFocus(child, focused);
